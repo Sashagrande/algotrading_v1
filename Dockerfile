@@ -1,13 +1,32 @@
-# Используем базовый образ Go
-FROM golang:1.18-alpine
+# Этап сборки
+FROM golang:1.22.4 AS builder
 
+# Устанавливаем рабочую директорию внутри контейнера
 WORKDIR /app
 
-# Копируем все файлы в контейнер
-COPY . .
+# Копируем go.mod и go.sum для установки зависимостей
+COPY go.mod go.sum ./
 
 # Устанавливаем зависимости
-RUN go mod tidy
+RUN go mod download
 
-# Команда по умолчанию для запуска приложения
-CMD ["go", "run", "main.go"]
+# Копируем весь исходный код проекта
+COPY . .
+
+# Собираем приложение
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /app/bot ./main.go
+
+# Этап выполнения
+FROM alpine:latest
+
+# Устанавливаем рабочую директорию внутри контейнера
+WORKDIR /root/
+
+# Копируем бинарный файл из предыдущего этапа
+COPY --from=builder /app/bot .
+
+# Копируем конфигурационный файл, если необходимо
+COPY .env ./
+
+# Запускаем приложение
+CMD ["./bot"]

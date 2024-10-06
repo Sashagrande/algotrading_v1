@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+var StopSpotCh = make(chan bool)
+
 func StartSpotStream() {
 	wsURL := "wss://stream.bybit.com/v5/public/spot"
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
@@ -40,7 +42,7 @@ func StartSpotStream() {
 		for _, trade := range tradeResponse.Data {
 			tradeTime := time.UnixMilli(trade.Timestamp)
 			fmt.Printf("TradeId: %s, Price: %s USDT, Quantity: %s BTC, Time: %s\n",
-				trade.TradeId, trade.Price, trade.Quantity, tradeTime)
+				trade.TradeID, trade.Price, trade.Quantity, tradeTime)
 		}
 	}
 }

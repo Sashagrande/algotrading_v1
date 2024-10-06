@@ -34,9 +34,9 @@ func PlaceOrder(price float64, quantity string, orderType string) (int, error) {
 	// Время выполнения сделки
 	now := time.Now()
 
-	// SQL-запрос для вставки данных
+	// SQL-запрос для вставки данных в обновлённую таблицу trades
 	query := `
-		INSERT INTO trades (trade_id, buy_price, quantity, buy_time, status)
+		INSERT INTO trades (trade_id, trade_price, quantity, trade_time, status)
 		VALUES ($1, $2, $3, $4, $5) RETURNING id
 	`
 

@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 )
 
 func main() {
@@ -23,12 +24,14 @@ func main() {
 	// Чтение токена и URL Webhook из переменных окружения
 	token := os.Getenv("TELEGRAM_TOKEN")
 	webhookURL := os.Getenv("WEBHOOK_URL")
-	if token == "" || webhookURL == "" {
-		log.Fatal("TELEGRAM_TOKEN or WEBHOOK_URL not set")
+	chatIDStr := os.Getenv("CHAT_ID")
+	chatID, err := strconv.ParseInt(chatIDStr, 10, 64)
+	if token == "" || webhookURL == "" || chatID == 0 {
+		log.Fatal("TELEGRAM_TOKEN or WEBHOOK_URL or CHAT_ID not set")
 	}
 
 	// Инициализация бота
-	b, err := telegram.InitBot(token, webhookURL)
+	b, err := telegram.InitBot(token, webhookURL, chatID)
 	if err != nil {
 		fmt.Printf("Error initializing bot: %v\n", err)
 		return
@@ -46,6 +49,13 @@ func main() {
 		}
 		b.ProcessUpdate(context.Background(), &update)
 		c.Status(200)
+	})
+
+	// Простой хендлер для корневого пути
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "Webhook is active!",
+		})
 	})
 
 	// Запуск сервера

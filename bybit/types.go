@@ -7,6 +7,6 @@ type TradeResponse struct {
 		Price     string `json:"p"`
 		Quantity  string `json:"v"`
 		Timestamp int64  `json:"T"`
-		TradeId   string `json:"i"`
+		TradeID   string `json:"i"`
 	} `json:"data"`
 }

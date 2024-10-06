@@ -20,6 +20,7 @@
 !Makefile
 !Dockerfile
 !docker-compose.yml
+!init.sql
 
 # ...even if they are in subdirectories
 !*/

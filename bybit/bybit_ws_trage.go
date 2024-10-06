@@ -1,59 +1,83 @@
 package bybit
 
 import (
-	"algotrading_v1/database"
+	"algotrading_v1/notifier"
 	"encoding/json"
-	"fmt"
 	"github.com/gorilla/websocket"
 	"log"
-	"strconv"
+	"sync"
+	"time"
 )
 
-func StartTradeStream() {
-	wsURL := "wss://stream.bybit.com/v5/public/spot"
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		log.Fatal("Error connecting to WebSocket:", err)
-	}
-	defer conn.Close()
+var StopTradeCh = make(chan bool)
 
-	subscribeMsg := map[string]interface{}{
-		"op":   "subscribe",
-		"args": []string{"publicTrade.BTCUSDT"},
-	}
-	conn.WriteJSON(subscribeMsg)
-	log.Println("Subscribed to BTC/USDT trade...")
-
+// Запуск торгового потока с покупками и продажами каждые 5 секунд
+func StartTradeStream(n notifier.Notifier) {
+	var mu sync.Mutex
 	for {
-		_, message, err := conn.ReadMessage()
-		if err != nil {
-			log.Println("Error reading message:", err)
+		select {
+		case <-StopTradeCh: // Добавляем проверку остановки
+			log.Println("Received stop signal, stopping trade stream...")
 			return
-		}
-
-		var tradeResponse TradeResponse
-		err = json.Unmarshal(message, &tradeResponse)
-		if err != nil {
-			log.Println("Error parsing message:", err)
-			continue
-		}
-
-		for _, trade := range tradeResponse.Data {
-			priceThreshold := 63000.00
-			price, err := strconv.ParseFloat(trade.Price, 64)
+		default:
+			wsURL := "wss://stream.bybit.com/v5/public/spot"
+			conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 			if err != nil {
-				log.Println("Error parsing price:", err)
+				log.Printf("Error connecting to WebSocket: %v. Retrying...", err)
+				time.Sleep(5 * time.Second)
 				continue
 			}
+			log.Println("Connected to WebSocket")
 
-			if price <= priceThreshold {
-				orderId, err := database.PlaceOrder(price, trade.Quantity, "buy")
+			defer conn.Close()
+
+			for {
+				_, message, err := conn.ReadMessage()
 				if err != nil {
-					log.Println("Error placing order:", err)
+					log.Printf("Error reading message: %v. Reconnecting...", err)
+					break
+				}
+
+				var response TradeResponse
+				err = json.Unmarshal(message, &response)
+				if err != nil {
+					log.Printf("Error parsing message: %v", err)
 					continue
 				}
-				fmt.Printf("Order placed: %s at %f USDT\n", orderId, price)
+
+				if response.Topic == "publicTrade.BTCUSDT" {
+					for _, tradeData := range response.Data {
+						lastPrice := tradeData.Price
+						mu.Lock()
+						performTrade(n, tradeData.TradeID, lastPrice)
+						mu.Unlock()
+						time.Sleep(5 * time.Second)
+
+						// Проверяем сигнал остановки
+						select {
+						case <-StopTradeCh:
+							log.Println("Received stop signal during trade, stopping...")
+							return
+						default:
+						}
+					}
+				}
 			}
 		}
 	}
+}
+
+// Выполнение сделки
+func performTrade(n notifier.Notifier, tradeID, lastPrice string) {
+	quantity := "0.1" // Пример объёма
+
+	// Покупка
+	buyTime := time.Now().Format("2006-01-02 15:04:05")
+	n.SendTradeResult(tradeID, "buy", lastPrice, quantity, buyTime)
+
+	time.Sleep(5 * time.Second) // Ждём 5 секунд перед продажей
+
+	// Продажа
+	sellTime := time.Now().Format("2006-01-02 15:04:05")
+	n.SendTradeResult(tradeID, "sell", lastPrice, quantity, sellTime)
 }
